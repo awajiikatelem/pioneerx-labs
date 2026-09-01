@@ -2,9 +2,10 @@ import { BlogPost } from '../types';
 import felixImage from '../assets/team/Felix.png';
 import samuelImage from '../assets/team/Samuel.jpg';
 import tenerifaImage from '../assets/team/Tenerifa.jpg';
-import farmImage from '../assets/team/farm.png';
+import farmImage from '../assets/team/farm.PNG';
 import ecosafeImage from '../assets/team/ecosafe.png';
-import dashboardImage from '../assets/team/dashboard.png';
+import dashboardImage from '../assets/team/dashboard.PNG';
+
 
 export const BLOG_DATA: BlogPost[] = [
   {

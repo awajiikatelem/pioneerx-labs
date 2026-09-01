@@ -4,8 +4,9 @@ import awardImage from '../assets/team/Felix-award.jpg';
 import awardImage1 from '../assets/team/Samuel-award.jpg'
 import awardImage2 from '../assets/team/Goodnews-award.jpg';
 import awardImage3 from  "../assets/team/Tenerifa-award (1).jpg"
-import awardImage4 from '../assets/team/Felix-award (2).jpg';
+import awardImage4 from '../assets/team/felix-award (2).jpg';
 import awardImage5 from '../assets/team/Sam.jpg';
+
 
 
 interface AwardItem {

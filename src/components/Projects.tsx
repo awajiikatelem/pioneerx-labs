@@ -3,7 +3,8 @@ import { PROJECTS_DATA } from '../data/projects';
 import { ProjectModal } from './Modals/ProjectModal';
 import { Project } from '../types';
 import ecosafeImage from '../assets/team/ecosafe.png';
-import dashboardImage from '../assets/team/dashboard.png';
+import dashboardImage from '../assets/team/dashboard.PNG';
+
 import {
   FolderGit2,
   ArrowUpRight,
