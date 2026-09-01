@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getSiteUrl } from '../lib/config';
 import {
   getAllTestimonialsAdmin,
   updateTestimonialStatus,
@@ -76,10 +77,7 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
   const [editPhotoUrl, setEditPhotoUrl] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  const reviewSubmissionUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/testimonials/submit`
-      : '/testimonials/submit';
+  const reviewSubmissionUrl = `${getSiteUrl()}/testimonials/submit`;
 
   const adminSecret = import.meta.env.VITE_ADMIN_PASSCODE || 'PioneerX2026!';
 

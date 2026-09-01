@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getSiteUrl } from '../lib/config';
 import {
   Copy,
   Check,
@@ -24,10 +25,7 @@ export const ShareReviewLink: React.FC<ShareReviewLinkProps> = ({
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  const reviewUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/testimonials/submit`
-      : '/testimonials/submit';
+  const reviewUrl = `${getSiteUrl()}/testimonials/submit`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(reviewUrl).catch(() => {});
