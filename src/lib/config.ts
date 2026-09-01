@@ -1,7 +1,7 @@
 /**
  * Application environment configuration & base URLs.
  */
-export const PRODUCTION_SITE_URL = 'https://pioneerx-labs-3kds.vercel.app';
+export const PRODUCTION_SITE_URL = 'https://pioneerx-labs.vercel.app';
 
 /**
  * Returns the base URL of the site.
