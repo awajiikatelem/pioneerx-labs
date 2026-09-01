@@ -45,18 +45,23 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const normalizedPath =
+    currentPath.length > 1 && currentPath.endsWith('/')
+      ? currentPath.slice(0, -1)
+      : currentPath;
+
   // Update dynamic document titles & SEO meta on route changes
   useEffect(() => {
-    if (currentPath === '/testimonials') {
+    if (normalizedPath === '/testimonials') {
       document.title = 'Client Testimonials & Endorsements | PioneerX Labs';
-    } else if (currentPath === '/testimonials/submit') {
+    } else if (normalizedPath === '/testimonials/submit') {
       document.title = 'Share Your Experience | PioneerX Labs';
-    } else if (currentPath === '/admin/testimonials') {
+    } else if (normalizedPath === '/admin/testimonials') {
       document.title = 'Admin Testimonial Console | PioneerX Labs';
     } else {
       document.title = 'PioneerX Labs | Youth-Led Technology & Innovation';
     }
-  }, [currentPath]);
+  }, [normalizedPath]);
 
 
   const handleNavigate = (target: string) => {
@@ -100,16 +105,16 @@ export const App: React.FC = () => {
       <Navbar
         onOpenCommand={() => setCommandMenuOpen(true)}
         onNavigate={handleNavigate}
-        currentPath={currentPath}
+        currentPath={normalizedPath}
       />
 
       {/* Main Content & Page Views */}
       <main>
-        {currentPath === '/testimonials' ? (
+        {normalizedPath === '/testimonials' ? (
           <TestimonialsPage onNavigate={handleNavigate} />
-        ) : currentPath === '/testimonials/submit' ? (
+        ) : normalizedPath === '/testimonials/submit' ? (
           <TestimonialsSubmitPage onNavigate={handleNavigate} />
-        ) : currentPath === '/admin/testimonials' ? (
+        ) : normalizedPath === '/admin/testimonials' ? (
           <AdminTestimonialsPage onNavigate={handleNavigate} />
         ) : (
 
