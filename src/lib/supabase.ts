@@ -91,6 +91,31 @@ export async function getApprovedTestimonials(): Promise<Testimonial[]> {
     .map(mapRecordToTestimonial);
 }
 
+/** Fetch a single testimonial by its ID */
+export async function getTestimonialById(id: string): Promise<Testimonial | null> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('testimonials')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('Supabase getById query error:', error.message);
+      } else if (data) {
+        return mapRecordToTestimonial(data);
+      }
+    } catch (err) {
+      console.warn('Error connecting to Supabase for getTestimonialById:', err);
+    }
+  }
+
+  // Fallback to local storage
+  const localMatch = getLocalItems().find((item) => String(item.id) === String(id));
+  return localMatch ? mapRecordToTestimonial(localMatch) : null;
+}
+
 /** Submit a new review (status starts as 'pending') */
 export async function submitTestimonial(input: {
   full_name: string;

@@ -50,18 +50,28 @@ export const App: React.FC = () => {
       ? currentPath.slice(0, -1)
       : currentPath;
 
+  const isTestimonialsSubmit = normalizedPath === '/testimonials/submit';
+  const isTestimonialsList = normalizedPath === '/testimonials';
+  const isSingleTestimonial =
+    normalizedPath.startsWith('/testimonials/') && !isTestimonialsSubmit;
+  const singleTestimonialId = isSingleTestimonial
+    ? normalizedPath.replace('/testimonials/', '')
+    : null;
+
   // Update dynamic document titles & SEO meta on route changes
   useEffect(() => {
-    if (normalizedPath === '/testimonials') {
+    if (isTestimonialsList) {
       document.title = 'Client Testimonials & Endorsements | PioneerX Labs';
-    } else if (normalizedPath === '/testimonials/submit') {
+    } else if (isSingleTestimonial) {
+      document.title = 'Client Endorsement Spotlight | PioneerX Labs';
+    } else if (isTestimonialsSubmit) {
       document.title = 'Share Your Experience | PioneerX Labs';
     } else if (normalizedPath === '/admin/testimonials') {
       document.title = 'Admin Testimonial Console | PioneerX Labs';
     } else {
       document.title = 'PioneerX Labs | Youth-Led Technology & Innovation';
     }
-  }, [normalizedPath]);
+  }, [normalizedPath, isTestimonialsList, isSingleTestimonial, isTestimonialsSubmit]);
 
 
   const handleNavigate = (target: string) => {
@@ -110,9 +120,12 @@ export const App: React.FC = () => {
 
       {/* Main Content & Page Views */}
       <main>
-        {normalizedPath === '/testimonials' ? (
-          <TestimonialsPage onNavigate={handleNavigate} />
-        ) : normalizedPath === '/testimonials/submit' ? (
+        {isTestimonialsList || isSingleTestimonial ? (
+          <TestimonialsPage
+            onNavigate={handleNavigate}
+            singleTestimonialId={singleTestimonialId}
+          />
+        ) : isTestimonialsSubmit ? (
           <TestimonialsSubmitPage onNavigate={handleNavigate} />
         ) : normalizedPath === '/admin/testimonials' ? (
           <AdminTestimonialsPage onNavigate={handleNavigate} />

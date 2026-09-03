@@ -9,6 +9,7 @@ import {
 } from '../lib/supabase';
 import { isCloudinaryConfigured } from '../lib/cloudinary';
 import { Testimonial, TestimonialStatus } from '../types';
+import { ShareTestimonialModal } from './ShareTestimonialModal';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -39,7 +40,6 @@ import {
   Download,
 } from 'lucide-react';
 
-
 interface AdminTestimonialsPageProps {
   onNavigate: (path: string) => void;
 }
@@ -60,8 +60,14 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Filtering & Search
-  const [statusFilter, setStatusFilter] = useState<'all' | TestimonialStatus>('all');
+  // Recently approved item for immediate sharing prompt
+  const [recentlyApprovedItem, setRecentlyApprovedItem] = useState<Testimonial | null>(null);
+
+  // Sharing Modal State
+  const [sharingItem, setSharingItem] = useState<Testimonial | null>(null);
+
+  // Filtering & Search: Default to 'pending' if pending items exist, else 'all'
+  const [statusFilter, setStatusFilter] = useState<'all' | TestimonialStatus>('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Copy Feedback State
@@ -78,7 +84,6 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const reviewSubmissionUrl = `${getSiteUrl()}/testimonials/submit`;
-
   const adminSecret = import.meta.env.VITE_ADMIN_PASSCODE || 'PioneerX2026!';
 
   // Unlock Admin Panel
@@ -107,7 +112,9 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
       const res = await getAllTestimonialsAdmin();
       setTestimonials(res.data);
       if (res.error) {
-        setErrorMsg(`Supabase Database Warning: ${res.error}. If you haven't created the 'testimonials' table in Supabase yet, please copy and run the SQL script from 'supabase_schema.sql' in your Supabase SQL Editor.`);
+        setErrorMsg(
+          `Supabase Database Warning: ${res.error}. If you haven't created the 'testimonials' table in Supabase yet, please copy and run the SQL script from 'supabase_schema.sql' in your Supabase SQL Editor.`
+        );
       }
     } catch (err: any) {
       setErrorMsg('Failed to load testimonials: ' + (err.message || 'Unknown error'));
@@ -141,15 +148,29 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
     setErrorMsg('');
     setSuccessMsg('');
 
+    const targetItem = testimonials.find((t) => t.id === id);
     const res = await updateTestimonialStatus(id, newStatus);
     setActionLoadingId(null);
 
     if (res.success) {
-      setSuccessMsg(`Testimonial status updated to ${newStatus.toUpperCase()}`);
+      const updatedItem = targetItem ? { ...targetItem, status: newStatus } : null;
       setTestimonials((prev) =>
         prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
       );
-      setTimeout(() => setSuccessMsg(''), 4000);
+
+      if (newStatus === 'approved') {
+        setSuccessMsg('Testimonial approved successfully.');
+        if (updatedItem) {
+          setRecentlyApprovedItem(updatedItem);
+        }
+      } else {
+        setSuccessMsg(`Testimonial status marked as ${newStatus.toUpperCase()}.`);
+        if (recentlyApprovedItem?.id === id) {
+          setRecentlyApprovedItem(null);
+        }
+      }
+
+      setTimeout(() => setSuccessMsg(''), 6000);
     } else {
       setErrorMsg(res.error || 'Failed to update status.');
     }
@@ -171,6 +192,9 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
     if (res.success) {
       setSuccessMsg('Testimonial deleted successfully.');
       setTestimonials((prev) => prev.filter((t) => t.id !== id));
+      if (recentlyApprovedItem?.id === id) {
+        setRecentlyApprovedItem(null);
+      }
       setTimeout(() => setSuccessMsg(''), 4000);
     } else {
       setErrorMsg(res.error || 'Failed to delete testimonial.');
@@ -279,12 +303,14 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `pioneerx_testimonials_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute(
+      'download',
+      `pioneerx_testimonials_${new Date().toISOString().slice(0, 10)}.csv`
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
-
 
   // Share via WhatsApp
   const whatsappMessage = `Hi! We'd love to hear about your experience working with PioneerX Labs. Please take a moment to share your feedback here: ${reviewSubmissionUrl}`;
@@ -461,7 +487,7 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
             Testimonial <span className="gradient-text">Management</span>
           </h1>
           <p className="text-slate-400 text-sm sm:text-base">
-            Review, approve, edit, or reject submitted client testimonials before they appear publicly.
+            Review, approve, reject, or generate branded social graphics from submitted client testimonials.
           </p>
         </div>
 
@@ -478,51 +504,114 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
           </div>
         )}
 
+        {/* Success Alert with Direct Share / View Action for newly approved testimonial */}
         {successMsg && (
-          <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm flex items-center justify-between gap-3 shadow-lg shadow-emerald-500/10">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-              <span>{successMsg}</span>
+          <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl shadow-emerald-500/10 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+              <div>
+                <span className="font-bold text-white block sm:inline">{successMsg}</span>
+                {recentlyApprovedItem && (
+                  <span className="text-xs text-emerald-300/80 block mt-0.5 sm:mt-0 sm:inline sm:ml-2">
+                    ({recentlyApprovedItem.full_name || recentlyApprovedItem.name} is now live on the website)
+                  </span>
+                )}
+              </div>
             </div>
-            <button onClick={() => setSuccessMsg('')} className="text-emerald-400 hover:text-white cursor-pointer">
-              <X className="w-4 h-4" />
-            </button>
+
+            {recentlyApprovedItem && (
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => onNavigate(`/testimonials/${recentlyApprovedItem.id}`)}
+                  className="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5 text-sky-400" />
+                  <span>View Live</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSharingItem(recentlyApprovedItem)}
+                  className="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition-all cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share Testimonial</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* ── SECTION 1: STATISTICS CARDS ───────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
-          <div className="glass-panel p-5 rounded-2xl border border-slate-800 space-y-1">
-            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Total</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-white font-mono">{totalCount}</div>
-            <span className="text-[11px] text-slate-500">Submissions</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`glass-panel p-5 rounded-2xl border text-left transition-all cursor-pointer ${
+              statusFilter === 'all'
+                ? 'border-sky-400 bg-sky-500/10 shadow-lg shadow-sky-500/10'
+                : 'border-slate-800 hover:border-slate-700'
+            }`}
+          >
+            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider block">Total</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-white font-mono mt-1">{totalCount}</div>
+            <span className="text-[11px] text-slate-500 block mt-0.5">Submissions</span>
+          </button>
 
-          <div className="glass-panel p-5 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-1">
-            <span className="text-xs text-amber-400 font-semibold uppercase tracking-wider">Pending</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-amber-300 font-mono">{pendingCount}</div>
-            <span className="text-[11px] text-amber-400/70">Awaiting approval</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('pending')}
+            className={`glass-panel p-5 rounded-2xl border text-left transition-all cursor-pointer ${
+              statusFilter === 'pending'
+                ? 'border-amber-400 bg-amber-500/15 shadow-lg shadow-amber-500/10'
+                : 'border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-amber-400 font-semibold uppercase tracking-wider">Pending</span>
+              {pendingCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              )}
+            </div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-amber-300 font-mono mt-1">{pendingCount}</div>
+            <span className="text-[11px] text-amber-400/70 block mt-0.5">Awaiting review</span>
+          </button>
 
-          <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 space-y-1">
-            <span className="text-xs text-emerald-400 font-semibold uppercase tracking-wider">Approved</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-300 font-mono">{approvedCount}</div>
-            <span className="text-[11px] text-emerald-400/70">Live on website</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('approved')}
+            className={`glass-panel p-5 rounded-2xl border text-left transition-all cursor-pointer ${
+              statusFilter === 'approved'
+                ? 'border-emerald-400 bg-emerald-500/15 shadow-lg shadow-emerald-500/10'
+                : 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50'
+            }`}
+          >
+            <span className="text-xs text-emerald-400 font-semibold uppercase tracking-wider block">Approved</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-300 font-mono mt-1">{approvedCount}</div>
+            <span className="text-[11px] text-emerald-400/70 block mt-0.5">Live & Shareable</span>
+          </button>
 
-          <div className="glass-panel p-5 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-1">
-            <span className="text-xs text-rose-400 font-semibold uppercase tracking-wider">Rejected</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-rose-300 font-mono">{rejectedCount}</div>
-            <span className="text-[11px] text-rose-400/70">Hidden from public</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('rejected')}
+            className={`glass-panel p-5 rounded-2xl border text-left transition-all cursor-pointer ${
+              statusFilter === 'rejected'
+                ? 'border-rose-400 bg-rose-500/15 shadow-lg shadow-rose-500/10'
+                : 'border-rose-500/30 bg-rose-500/5 hover:border-rose-500/50'
+            }`}
+          >
+            <span className="text-xs text-rose-400 font-semibold uppercase tracking-wider block">Rejected</span>
+            <div className="text-2xl sm:text-3xl font-extrabold text-rose-300 font-mono mt-1">{rejectedCount}</div>
+            <span className="text-[11px] text-rose-400/70 block mt-0.5">Hidden</span>
+          </button>
 
           <div className="glass-panel p-5 rounded-2xl border border-sky-500/30 bg-sky-500/5 space-y-1 col-span-2 sm:col-span-1">
             <span className="text-xs text-sky-400 font-semibold uppercase tracking-wider">Avg Rating</span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-sky-300 font-mono flex items-center gap-1.5">
+            <div className="text-2xl sm:text-3xl font-extrabold text-sky-300 font-mono flex items-center gap-1.5 mt-1">
               <span>{averageRating}</span>
               <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
             </div>
-            <span className="text-[11px] text-sky-400/70">Out of 5.0 stars</span>
+            <span className="text-[11px] text-sky-400/70 block mt-0.5">Out of 5.0 stars</span>
           </div>
         </div>
 
@@ -538,7 +627,7 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
                   <h2 className="text-xl font-bold text-white">Invite Clients to Review PioneerX Labs</h2>
                 </div>
                 <p className="text-xs sm:text-sm text-slate-400">
-                  Send this link to clients via WhatsApp, email, or direct messaging to collect authentic feedback.
+                  Send this direct submission link to clients via WhatsApp, email, or direct message.
                 </p>
               </div>
 
@@ -596,54 +685,85 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
           </div>
         </div>
 
-        {/* ── SECTION 3: SEARCH & FILTER BAR ────────────────────── */}
+        {/* ── SECTION 3: THREE MAIN SECTIONS / TABS ──────────────── */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
-          {/* Status Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 sm:pb-0">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                statusFilter === 'all'
-                  ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
-              }`}
-            >
-              All ({totalCount})
-            </button>
+          {/* Status Tabs (Pending, Approved, Rejected, All) */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
+            {/* 1. Pending Tab */}
             <button
               onClick={() => setStatusFilter('pending')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
                 statusFilter === 'pending'
-                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
                   : 'bg-slate-900 text-amber-400 hover:bg-slate-800 border border-amber-500/30'
               }`}
             >
               <span>Pending</span>
               {pendingCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-amber-950 text-amber-300 text-[10px]">
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                    statusFilter === 'pending'
+                      ? 'bg-amber-950 text-amber-300'
+                      : 'bg-amber-500/20 text-amber-300'
+                  }`}
+                >
                   {pendingCount}
                 </span>
               )}
             </button>
+
+            {/* 2. Approved Tab */}
             <button
               onClick={() => setStatusFilter('approved')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
                 statusFilter === 'approved'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
                   : 'bg-slate-900 text-emerald-400 hover:bg-slate-800 border border-emerald-500/30'
               }`}
             >
-              Approved ({approvedCount})
+              <span>Approved</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                  statusFilter === 'approved'
+                    ? 'bg-emerald-950 text-emerald-300'
+                    : 'bg-emerald-500/20 text-emerald-300'
+                }`}
+              >
+                {approvedCount}
+              </span>
             </button>
+
+            {/* 3. Rejected Tab */}
             <button
               onClick={() => setStatusFilter('rejected')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
                 statusFilter === 'rejected'
-                  ? 'bg-rose-500 text-slate-950 shadow-md shadow-rose-500/20'
+                  ? 'bg-rose-500 text-slate-950 shadow-lg shadow-rose-500/20'
                   : 'bg-slate-900 text-rose-400 hover:bg-slate-800 border border-rose-500/30'
               }`}
             >
-              Rejected ({rejectedCount})
+              <span>Rejected</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                  statusFilter === 'rejected'
+                    ? 'bg-rose-950 text-rose-300'
+                    : 'bg-rose-500/20 text-rose-300'
+                }`}
+              >
+                {rejectedCount}
+              </span>
+            </button>
+
+            {/* All Tab */}
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                statusFilter === 'all'
+                  ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20'
+                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              All ({totalCount})
             </button>
           </div>
 
@@ -653,7 +773,7 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search name, email, review..."
+                placeholder="Search name, role, review..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 text-xs text-white border border-slate-800 focus:border-sky-500 focus:outline-none"
@@ -678,7 +798,6 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
-
         </div>
 
         {/* ── SECTION 4: TESTIMONIAL CARDS LIST ──────────────────── */}
@@ -693,7 +812,7 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
             <h3 className="text-xl font-bold text-white">No Testimonials Found</h3>
             <p className="text-sm text-slate-400 max-w-md mx-auto">
               {statusFilter !== 'all'
-                ? `There are no testimonials currently marked as ${statusFilter}.`
+                ? `There are no testimonials currently in the '${statusFilter.toUpperCase()}' category.`
                 : 'No testimonial submissions have been received yet.'}
             </p>
           </div>
@@ -712,139 +831,182 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
                 .toUpperCase() || 'PX';
 
               const isActioning = actionLoadingId === item.id;
+              const isApproved = item.status === 'approved';
+              const isPending = item.status === 'pending';
 
               return (
                 <div
                   key={item.id}
-                  className={`glass-panel rounded-2xl p-6 border transition-all space-y-5 relative bg-slate-950/70 ${
-                    item.status === 'pending'
+                  className={`glass-panel rounded-2xl p-6 border transition-all space-y-5 relative bg-slate-950/70 flex flex-col justify-between ${
+                    isPending
                       ? 'border-amber-500/40 shadow-lg shadow-amber-500/5'
-                      : item.status === 'approved'
-                      ? 'border-emerald-500/30 shadow-lg shadow-emerald-500/5'
+                      : isApproved
+                      ? 'border-emerald-500/35 shadow-lg shadow-emerald-500/5'
                       : 'border-rose-500/20 opacity-75'
                   }`}
                 >
-                  {/* Status Ribbon Header */}
-                  <div className="flex items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                          item.status === 'pending'
-                            ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                            : item.status === 'approved'
-                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                            : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
-                        }`}
-                      >
+                  <div className="space-y-4">
+                    {/* Status Ribbon Header */}
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+                      <div className="flex items-center gap-2">
                         <span
-                          className={`w-2 h-2 rounded-full ${
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
                             item.status === 'pending'
-                              ? 'bg-amber-400 animate-pulse'
+                              ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                               : item.status === 'approved'
-                              ? 'bg-emerald-400'
-                              : 'bg-rose-400'
+                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                              : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                          }`}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              item.status === 'pending'
+                                ? 'bg-amber-400 animate-pulse'
+                                : item.status === 'approved'
+                                ? 'bg-emerald-400'
+                                : 'bg-rose-400'
+                            }`}
+                          />
+                          <span>{item.status}</span>
+                        </span>
+
+                        {item.permission_granted && (
+                          <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                            Permission Granted
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>{item.date || 'Recent'}</span>
+                      </span>
+                    </div>
+
+                    {/* Client Info Block */}
+                    <div className="flex items-start gap-4">
+                      <div className="w-14 h-14 rounded-2xl overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center flex-shrink-0 shadow">
+                        {photo ? (
+                          <img src={photo} alt={displayName} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-sky-600 to-indigo-700 flex items-center justify-center text-white font-bold text-base">
+                            {initials}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <h3 className="font-bold text-white text-base truncate">{displayName}</h3>
+                        
+                        {/* Email address (Admin visible) */}
+                        {item.email && (
+                          <p className="text-xs text-sky-300 flex items-center gap-1 truncate font-mono">
+                            <Mail className="w-3 h-3 text-sky-400 flex-shrink-0" />
+                            <span className="truncate">{item.email}</span>
+                          </p>
+                        )}
+
+                        {(item.role || item.company) && (
+                          <p className="text-xs text-slate-400 flex items-center gap-1 truncate">
+                            <Building2 className="w-3 h-3 text-slate-500 flex-shrink-0" />
+                            <span className="truncate">
+                              {item.role} {item.role && item.company ? 'at' : ''} {item.company}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Star Rating */}
+                    <div className="flex items-center gap-1 text-amber-400">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`w-4 h-4 ${
+                            star <= item.rating
+                              ? 'fill-amber-400 text-amber-400'
+                              : 'fill-slate-800 text-slate-700'
                           }`}
                         />
-                        <span>{item.status}</span>
+                      ))}
+                      <span className="text-xs font-semibold text-slate-400 ml-1.5 font-mono">
+                        {item.rating}.0 / 5.0
                       </span>
-
-                      {item.permission_granted && (
-                        <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                          Permission Granted
-                        </span>
-                      )}
                     </div>
 
-                    <span className="text-xs text-slate-400 flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>{item.date || 'Recent'}</span>
-                    </span>
-                  </div>
-
-                  {/* Client Info Block */}
-                  <div className="flex items-start gap-4">
-                    <div className="w-14 h-14 rounded-2xl overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center flex-shrink-0">
-                      {photo ? (
-                        <img src={photo} alt={displayName} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-sky-600 to-indigo-700 flex items-center justify-center text-white font-bold text-base">
-                          {initials}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <h3 className="font-bold text-white text-base truncate">{displayName}</h3>
-                      
-                      {/* Email address (Admin visible) */}
-                      {item.email && (
-                        <p className="text-xs text-sky-300 flex items-center gap-1 truncate font-mono">
-                          <Mail className="w-3 h-3 text-sky-400 flex-shrink-0" />
-                          <span className="truncate">{item.email}</span>
-                        </p>
-                      )}
-
-                      {(item.role || item.company) && (
-                        <p className="text-xs text-slate-400 flex items-center gap-1 truncate">
-                          <Building2 className="w-3 h-3 text-slate-500 flex-shrink-0" />
-                          <span className="truncate">
-                            {item.role} {item.role && item.company ? 'at' : ''} {item.company}
-                          </span>
-                        </p>
-                      )}
+                    {/* Review Text */}
+                    <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800">
+                      <p className="text-slate-200 text-xs sm:text-sm leading-relaxed italic">
+                        "{item.review || item.quote}"
+                      </p>
                     </div>
                   </div>
 
-                  {/* Rating */}
-                  <div className="flex items-center gap-1 text-amber-400">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star
-                        key={star}
-                        className={`w-4 h-4 ${
-                          star <= item.rating
-                            ? 'fill-amber-400 text-amber-400'
-                            : 'fill-slate-800 text-slate-700'
-                        }`}
-                      />
-                    ))}
-                    <span className="text-xs font-semibold text-slate-400 ml-1.5 font-mono">
-                      {item.rating}.0 / 5.0
-                    </span>
-                  </div>
+                  {/* Action Buttons Toolbar */}
+                  <div className="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                    {/* Primary Status & Share Actions */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* PENDING ACTIONS: Approve, Reject */}
+                      {item.status === 'pending' && (
+                        <>
+                          <button
+                            disabled={isActioning}
+                            onClick={() => handleStatusChange(item.id, 'approved')}
+                            className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Approve</span>
+                          </button>
 
-                  {/* Review Text */}
-                  <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800">
-                    <p className="text-slate-200 text-xs sm:text-sm leading-relaxed italic">
-                      "{item.review || item.quote}"
-                    </p>
-                  </div>
+                          <button
+                            disabled={isActioning}
+                            onClick={() => handleStatusChange(item.id, 'rejected')}
+                            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            <XCircle className="w-4 h-4" />
+                            <span>Reject</span>
+                          </button>
+                        </>
+                      )}
 
-                  {/* Action Buttons */}
-                  <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      {item.status !== 'approved' && (
+                      {/* APPROVED ACTIONS: Share Testimonial & View Live */}
+                      {item.status === 'approved' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setSharingItem(item)}
+                            className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white shadow-md shadow-sky-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            <span>Share Testimonial</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onNavigate(`/testimonials/${item.id}`)}
+                            className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 transition-all cursor-pointer flex items-center gap-1.5"
+                            title="View Public Testimonial Page"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-sky-400" />
+                            <span>View</span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* REJECTED ACTIONS: Re-Approve Option */}
+                      {item.status === 'rejected' && (
                         <button
                           disabled={isActioning}
                           onClick={() => handleStatusChange(item.id, 'approved')}
-                          className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                          className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                         >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Approve</span>
-                        </button>
-                      )}
-
-                      {item.status !== 'rejected' && (
-                        <button
-                          disabled={isActioning}
-                          onClick={() => handleStatusChange(item.id, 'rejected')}
-                          className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                        >
-                          <XCircle className="w-4 h-4" />
-                          <span>Reject</span>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Approve Review</span>
                         </button>
                       )}
                     </div>
 
+                    {/* Secondary Management Actions: Edit & Delete */}
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => openEditModal(item)}
@@ -872,6 +1034,13 @@ export const AdminTestimonialsPage: React.FC<AdminTestimonialsPageProps> = ({ on
         )}
 
       </div>
+
+      {/* ── SHARE TESTIMONIAL MODAL ────────────────────────────── */}
+      <ShareTestimonialModal
+        testimonial={sharingItem}
+        isOpen={Boolean(sharingItem)}
+        onClose={() => setSharingItem(null)}
+      />
 
       {/* ── EDIT MODAL ─────────────────────────────────────────── */}
       {editingItem && (
